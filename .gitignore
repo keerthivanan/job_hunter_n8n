@@ -1,0 +1,26 @@
+# Secrets — NEVER commit these
+.env
+*.env
+*.env.*
+
+# CV and personal documents
+*.pdf
+*.docx
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Logs and output
+logs/
+output/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# n8n workflow cache
+agents/
+templates/
+utils/

@@ -1,0 +1,487 @@
+{
+  "updatedAt": "2026-03-26T12:44:23.709Z",
+  "createdAt": "2026-03-26T05:41:09.415Z",
+  "id": "kBizVcdRCNhCyZTM",
+  "name": "APPLY -- Linear Pipeline (AI Fixed)",
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "id": "lin-01",
+      "name": "Run Manually",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        160,
+        300
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "lin-02",
+      "name": "Get Last Apify Run",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        360,
+        300
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.apify.com/v2/acts/curious_coder~linkedin-jobs-scraper/runs/last?status=SUCCEEDED&token={{ .apifyApi.token }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "apifyApi",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "apifyApi": {
+          "id": "J5LkhCZsTDTIhUBE",
+          "name": "Apify account"
+        }
+      }
+    },
+    {
+      "id": "lin-03",
+      "name": "Fetch Last Apify Dataset",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        560,
+        300
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ \"https://api.apify.com/v2/datasets/\" + ($json.data && $json.data.defaultDatasetId || $json.defaultDatasetId) + \"/items?limit=50\" }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "apifyApi",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "apifyApi": {
+          "id": "J5LkhCZsTDTIhUBE",
+          "name": "Apify account"
+        }
+      }
+    },
+    {
+      "id": "lin-04",
+      "name": "Normalize All Jobs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        760,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const items = $input.all();\nconst allJobs = [];\nconst seen = new Set();\nfor (const item of items) {\n  const j = item.json;\n  if (!j || typeof j !== 'object') continue;\n  const title = j.title || j.standardizedTitle || j.jobTitle || '';\n  const url = j.url || j.jobUrl || j.linkedInUrl || j.applyUrl || j.link || '';\n  if (!title || !url) continue;\n  const rawId = j.id || j.jobId || url;\n  const jobId = 'li_' + String(rawId).replace(/[^a-z0-9]/gi, '').slice(-24);\n  if (seen.has(jobId)) continue;\n  seen.add(jobId);\n  let postedAt = null;\n  const postedRaw = j.postedAtTimestamp || j.postedAt || null;\n  if (postedRaw) {\n    const num = Number(postedRaw);\n    if (!isNaN(num) && num > 0) {\n      const ms = String(Math.round(num)).length <= 10 ? num * 1000 : num;\n      postedAt = new Date(ms).toISOString();\n    } else if (typeof postedRaw === 'string') {\n      const t = new Date(postedRaw).getTime();\n      if (!isNaN(t)) postedAt = new Date(t).toISOString();\n    }\n  }\n  if (!postedAt) postedAt = new Date().toISOString();\n  const company = j.companyName || j.company || (j.companyDetails && j.companyDetails.name) || 'Company';\n  const location = j.formattedLocation || j.location || j.country || 'Remote';\n  let desc = j.description || '';\n  if (j.descriptionHtml) desc = j.descriptionHtml.replace(/<[^>]+>/g, ' ');\n  desc = desc.replace(/\\s+/g, ' ').trim().slice(0, 2000);\n  allJobs.push({ json: { jobId, title, company, location, description: desc, url, source: 'linkedin_apify', postedAt } });\n}\nconsole.log('Input:', items.length, '| Normalized:', allJobs.length);\nconst capped = allJobs.slice(0, 20);\nif (capped.length === 0) return [{ json: { message: 'No jobs found' } }];\nreturn capped;"
+      }
+    },
+    {
+      "id": "lin-05",
+      "name": "Load Seen Job IDs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        960,
+        300
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "https://sheets.googleapis.com/v4/spreadsheets/1M6UF8XbiyA83JN_Poej3ec3YOwETpDPBqnbIrLgDYIQ/values/Applications!A:A",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "uzUh6HqKP03Ck9VO",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "id": "lin-06",
+      "name": "Filter New Jobs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1160,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "let normalizedItems;\ntry { normalizedItems = $('Normalize All Jobs').all(); } catch(e) { normalizedItems = []; }\nconst seenIds = new Set();\ntry {\n  for (const r of $input.all()) {\n    const j = r.json || {};\n    if (j.values && Array.isArray(j.values)) { for (const row of j.values) { if (row && row[0]) seenIds.add(String(row[0])); } }\n    if (j.jobId) seenIds.add(String(j.jobId));\n  }\n} catch(e) {}\nconst allValid = normalizedItems.filter(i => { const j = i.json; return j && j.jobId && j.url && j.title && !j.message; });\nconst newJobs = allValid.filter(i => !seenIds.has(String(i.json.jobId)));\nnewJobs.sort((a, b) => new Date(b.json.postedAt||0) - new Date(a.json.postedAt||0));\nconsole.log('Normalized:', normalizedItems.length, '| Seen:', seenIds.size, '| New:', newJobs.length);\nif (newJobs.length === 0) return [{ json: { message: 'No new jobs \u2014 all already applied' } }];\nreturn newJobs.slice(0, 3);"
+      }
+    },
+    {
+      "id": "lin-07",
+      "name": "One Job At A Time",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "return $input.all();"
+      }
+    },
+    {
+      "id": "lin-10",
+      "name": "Generate Resume",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1960,
+        160
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const j = $input.item.json;\n// CV is embedded at deploy time by deploy.js\nconst CV_BASE64 = ''; // placeholder \u2014 deploy.js patches this\nreturn { json: { ...j, resumeBase64: CV_BASE64, resumeFileName: 'Keerthivanan_S_Resume.pdf' } };"
+      }
+    },
+    {
+      "id": "lin-11",
+      "name": "Find HR Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2160,
+        160
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const j = $input.item.json;\nconst desc = j.description || '', company = j.company || '', jobUrl = j.url || '';\nconst EMAIL_RE = /[a-zA-Z0-9._%+\\-]+@[a-zA-Z0-9.\\-]+\\.[a-zA-Z]{2,}/g;\nconst SKIP = ['example.','noreply','no-reply','privacy','@linkedin','@sentry','@w3','.png','.gif','test@','@email.com','@applicantpro','@lensa','@indeed','@glassdoor'];\nconst descEmails = [...new Set([...(desc.matchAll?desc.matchAll(EMAIL_RE):[])].map(m=>m[0].toLowerCase()).filter(e=>!SKIP.some(s=>e.includes(s))))];\nif (descEmails.length > 0) return { json: { ...j, hrEmail: descEmails[0], emailMethod: 'extracted' } };\nconst JOB_BOARDS = ['linkedin.com','lensa.com','indeed.com','glassdoor.com','naukri.com','monster.com','ziprecruiter.com','lever.co','greenhouse.io'];\nlet domain = '';\nif (jobUrl && !JOB_BOARDS.some(b=>jobUrl.includes(b))) { const m=jobUrl.match(/https?:\\/\\/(?:www\\.)?([^\\/]+)/); if(m) domain=m[1].toLowerCase(); }\nif (!domain) { const c=company.toLowerCase().replace(/\\s+(inc\\.?|ltd\\.?|llc|corp\\.?|group|technologies|tech|solutions|ai|global|systems|services|pvt|private|limited|consulting|labs?|software|digital)\\.?\\s*$/gi,'').replace(/[^a-z0-9]/g,''); domain=c.length>=3?c+'.com':''; }\nif (!domain) return { json: { ...j, hrEmail: 'hr@'+company.toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,20)+'.com', emailMethod: 'guessed_name' } };\nreturn { json: { ...j, hrEmail: 'hr@'+domain, emailMethod: 'guessed_domain' } };"
+      }
+    },
+    {
+      "id": "lin-12",
+      "name": "Compose Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2360,
+        160
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const j = $input.item.json;\nconst creds = await this.getCredentials('openAiApi');\nconst OPENAI_KEY = creds.apiKey;\nconst targetEmail = j.hrEmail || 'keerthivanan7@gmail.com';\n\nconst SYSTEM = `Write a 120-word job application email from Keerthivanan S.\nRULES:\n- First line: \"Dear Hiring Team at [company],\"\n- Paragraph 1 (2 sentences): Hook with CargoLink.sa + one key metric matching the job.\n- Paragraph 2 (3 bullets): 3 achievements directly relevant to this specific job.\n- Paragraph 3 (1 sentence): Mention LinkedIn, GitHub, live portfolio.\n- Close: \"My resume is attached. Happy to connect.\"\n- Signature: Sincerely,\\nKeerthivanan S\\nkeerthivanan.ds.ai@gmail.com | +91-709-276-1445\n- Include in body: \"LinkedIn: https://linkedin.com/in/keerthi-vanan-s | GitHub: https://github.com/keerthivanan-s | Portfolio: https://cargolink.sa\"\n- STRICT 120 words MAX. No headers. No bold. Plain text only.\n- Return JSON: {\"subject\": \"Application: [role] | Keerthivanan S \u2014 AI Engineer\", \"body\": \"...\"}`;\n\ntry {\n  const res = await this.helpers.httpRequest({\n    method: 'POST',\n    url: 'https://api.openai.com/v1/chat/completions',\n    headers: { 'Authorization': 'Bearer ' + OPENAI_KEY, 'Content-Type': 'application/json' },\n    body: JSON.stringify({\n      model: 'gpt-4o-mini',\n      messages: [\n        { role: 'system', content: SYSTEM },\n        { role: 'user', content: 'Job: ' + j.title + ' at ' + j.company + ' (' + (j.location||'Remote') + ')\\nDescription: ' + (j.description||'').slice(0,600) + '\\n\\nCandidate facts: Gen AI Architect at CargoLink.sa. Built GPT-4+Qdrant RAG \u2192 65% faster processing, 95% accuracy, 1000+ users. Stack: Python, LangChain, FastAPI, Next.js 15, Docker, Redis, n8n. IEEE paper March 2025.' }\n      ],\n      temperature: 0.6,\n      response_format: { type: 'json_object' }\n    })\n  });\n  const raw = typeof res === 'string' ? JSON.parse(res) : res;\n  const parsed = JSON.parse(raw.choices[0].message.content);\n  return { json: { ...j, hrEmail: targetEmail, emailSubject: parsed.subject, emailBody: parsed.body, emailSkipped: false } };\n} catch(e) {\n  return { json: { ...j, hrEmail: targetEmail,\n    emailSubject: 'Application: ' + j.title + ' | Keerthivanan S \u2014 AI Engineer',\n    emailBody: 'Dear Hiring Team at ' + j.company + ',\\n\\nI built CargoLink.sa \u2014 a production logistics SaaS with 1000+ users, 99.5% uptime, and 65% faster AI-powered processing.\\n\\n\u2022 RAG system: GPT-4 + Qdrant, 95% quote accuracy, 500+ daily transactions\\n\u2022 Stack: Python, LangChain, FastAPI, Next.js 15, Docker, Redis, n8n\\n\u2022 Reduced costs 40%+ and deployment time from 2hrs to 15min\\n\\nLinkedIn: https://linkedin.com/in/keerthi-vanan-s | GitHub: https://github.com/keerthivanan-s | Portfolio: https://cargolink.sa\\n\\nMy resume is attached. Happy to connect.\\n\\nSincerely,\\nKeerthivanan S\\nkeerthivanan.ds.ai@gmail.com | +91-709-276-1445',\n    emailSkipped: false } };\n}"
+      }
+    },
+    {
+      "id": "lin-13",
+      "name": "Prepare PDF Binary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2560,
+        160
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const j = $input.item.json;\nconst base64 = j.resumeBase64;\nif (!base64) return { json: j };\nconst pdfBuffer = Buffer.from(base64, 'base64');\nconst binaryData = await this.helpers.prepareBinaryData(pdfBuffer, 'Keerthivanan_S_Resume.pdf', 'application/pdf');\nreturn { json: j, binary: { pdfAttachment: binaryData } };"
+      }
+    },
+    {
+      "id": "lin-13i",
+      "name": "Has Email?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2760,
+        160
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-has-email",
+              "leftValue": "={{ $json.hrEmail }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "lin-13g",
+      "name": "Send Email via Gmail",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [
+        2960,
+        80
+      ],
+      "parameters": {
+        "sendTo": "={{ $json.hrEmail }}",
+        "subject": "={{ $json.emailSubject }}",
+        "emailType": "text",
+        "message": "={{ $json.emailBody }}",
+        "attachmentsUi": {
+          "attachmentsBinary": [
+            {
+              "property": "pdfAttachment"
+            }
+          ]
+        },
+        "options": {
+          "ccList": "keerthivanan.ds.ai@gmail.com"
+        }
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "u9nTR62AcISNZKVR",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "id": "lin-14",
+      "name": "Log Applied Job",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3160,
+        160
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://sheets.googleapis.com/v4/spreadsheets/1M6UF8XbiyA83JN_Poej3ec3YOwETpDPBqnbIrLgDYIQ/values/Applications!A1:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleSheetsOAuth2Api",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ values: [[ String($json.jobId||''), new Date().toISOString(), new Date().toISOString(), $json.emailSkipped ? 'Applied - No Email' : 'Applied', String($json.title||''), String($json.company||''), String($json.location||''), String($json.url||''), String($json.source||''), Number($json.score||0), String($json.matchedSkills||''), String($json.hrEmail||''), 'latexonline.cc', String($json.emailSubject||''), 'Auto-applied via Apify' ]] }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "uzUh6HqKP03Ck9VO",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Run Manually": {
+      "main": [
+        [
+          {
+            "node": "Get Last Apify Run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Last Apify Run": {
+      "main": [
+        [
+          {
+            "node": "Fetch Last Apify Dataset",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Last Apify Dataset": {
+      "main": [
+        [
+          {
+            "node": "Normalize All Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize All Jobs": {
+      "main": [
+        [
+          {
+            "node": "Load Seen Job IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Seen Job IDs": {
+      "main": [
+        [
+          {
+            "node": "Filter New Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter New Jobs": {
+      "main": [
+        [
+          {
+            "node": "One Job At A Time",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "One Job At A Time": {
+      "main": [
+        [
+          {
+            "node": "Generate Resume",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Generate Resume": {
+      "main": [
+        [
+          {
+            "node": "Find HR Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find HR Email": {
+      "main": [
+        [
+          {
+            "node": "Compose Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compose Email": {
+      "main": [
+        [
+          {
+            "node": "Prepare PDF Binary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare PDF Binary": {
+      "main": [
+        [
+          {
+            "node": "Has Email?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Email?": {
+      "main": [
+        [
+          {
+            "node": "Send Email via Gmail",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Applied Job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Email via Gmail": {
+      "main": [
+        [
+          {
+            "node": "Log Applied Job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "callerPolicy": "workflowsFromSameOwner",
+    "saveDataSuccessExecution": "all",
+    "saveDataErrorExecution": "all"
+  },
+  "staticData": {
+    "node:Schedule Trigger": {
+      "recurrenceRules": []
+    }
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {},
+  "versionId": "2d2ab819-961f-486f-9bf4-ea1578e9b308",
+  "activeVersionId": null,
+  "triggerCount": 1,
+  "shared": [
+    {
+      "updatedAt": "2026-03-26T05:41:09.420Z",
+      "createdAt": "2026-03-26T05:41:09.420Z",
+      "role": "workflow:owner",
+      "workflowId": "kBizVcdRCNhCyZTM",
+      "projectId": "BBmNjuFCSs4eFiPm"
+    }
+  ],
+  "activeVersion": null,
+  "tags": []
+}

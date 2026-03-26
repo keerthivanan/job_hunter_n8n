@@ -1,0 +1,11 @@
+anthropic==0.34.2
+requests==2.32.3
+python-dotenv==1.0.1
+google-auth==2.35.0
+google-auth-oauthlib==1.2.1
+google-api-python-client==2.149.0
+gspread==6.1.2
+tenacity==9.0.0
+schedule==1.2.2
+pywin32==308
+feedparser==6.0.11

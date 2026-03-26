@@ -1,0 +1,188 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% ATS-OPTIMIZED RESUME TEMPLATE
+% 100% ATS-FRIENDLY - ZERO FANCY FORMATTING
+% LaTeX Class: article (standard, parseable)
+% Compiler: pdflatex
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\documentclass[11pt,a4paper,sans]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=0.75in]{geometry}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{xcolor}
+
+% ATS-FRIENDLY SETTINGS
+\pagestyle{empty} % No page numbers
+\setlength{\parindent}{0pt} % No paragraph indent
+\setlist[itemize]{leftmargin=*,label=\textbullet,nosep,after=\vspace{0.5\baselineskip}}
+
+% DEFINE COLORS (Professional, not distracting)
+\definecolor{headercolor}{RGB}{31,78,120} % Professional blue
+\definecolor{textcolor}{RGB}{0,0,0} % Pure black for ATS
+
+% HYPERLINK SETUP (ATS can read these)
+\hypersetup{
+    colorlinks=true,
+    linkcolor=headercolor,
+    urlcolor=headercolor,
+    pdfauthor={Keerthivanan S},
+    pdftitle={Keerthivanan S - AI Engineer Resume}
+}
+
+% SECTION FORMATTING (Simple, ATS-parseable)
+\newcommand{\resumesection}[1]{%
+    \vspace{8pt}
+    {\large\bfseries\color{headercolor}#1}
+    \vspace{2pt}
+    \hrule height 1pt
+    \vspace{6pt}
+}
+
+% JOB ENTRY FORMATTING
+\newcommand{\jobentry}[4]{%
+    \textbf{#1} | #2 \hfill #3\\
+    \textit{#4}
+    \vspace{4pt}
+}
+
+% PROJECT ENTRY
+\newcommand{\projectentry}[2]{%
+    \textbf{#1} \hfill #2\\
+    \vspace{2pt}
+}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% DOCUMENT START
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{document}
+
+% HEADER - Name and Contact (ATS reads this easily)
+{\LARGE\bfseries KEERTHIVANAN S}
+
+\vspace{4pt}
+
+\begin{tabular}{@{}l@{\hspace{20pt}}l@{\hspace{20pt}}l@{}}
+Email: \href{mailto:keerthivanan.ds.ai@gmail.com}{keerthivanan.ds.ai@gmail.com} &
+Mobile: +91-709-276-1445 &
+Location: Riyadh, Saudi Arabia \\
+LinkedIn: \href{https://linkedin.com/in/keerthi-vanan-s}{linkedin.com/in/keerthi-vanan-s} & & 
+\end{tabular}
+
+\vspace{10pt}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% PROFESSIONAL SUMMARY - DYNAMICALLY GENERATED
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\resumesection{PROFESSIONAL SUMMARY}
+
+{{PROFESSIONAL_SUMMARY}}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% PROFESSIONAL EXPERIENCE
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\resumesection{PROFESSIONAL EXPERIENCE}
+
+\jobentry{Gen AI Architect}{CargoLink (Freight Forwarding Startup)}{Dec 2025 - Present}{Riyadh, Saudi Arabia}
+
+\begin{itemize}
+    \item {{EXPERIENCE_BULLET_1}}
+    \item {{EXPERIENCE_BULLET_2}}
+    \item {{EXPERIENCE_BULLET_3}}
+    \item {{EXPERIENCE_BULLET_4}}
+\end{itemize}
+
+\vspace{6pt}
+
+\jobentry{Junior Data Analyst Intern}{Shiash Info Solution Private Limited}{Jul 2024 - Sep 2024}{Chennai, Tamil Nadu}
+
+\begin{itemize}
+    \item {{INTERN_BULLET_1}}
+    \item {{INTERN_BULLET_2}}
+    \item {{INTERN_BULLET_3}}
+\end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% TECHNICAL SKILLS - DYNAMICALLY REORDERED
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\resumesection{TECHNICAL SKILLS}
+
+\textbf{{{SKILL_CATEGORY_1}}:} {{SKILL_LIST_1}}
+
+\vspace{4pt}
+
+\textbf{{{SKILL_CATEGORY_2}}:} {{SKILL_LIST_2}}
+
+\vspace{4pt}
+
+\textbf{{{SKILL_CATEGORY_3}}:} {{SKILL_LIST_3}}
+
+\vspace{4pt}
+
+\textbf{{{SKILL_CATEGORY_4}}:} {{SKILL_LIST_4}}
+
+\vspace{4pt}
+
+\textbf{{{SKILL_CATEGORY_5}}:} {{SKILL_LIST_5}}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% KEY PROJECTS - DYNAMICALLY SELECTED
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\resumesection{KEY PROJECTS}
+
+\projectentry{{{PROJECT_1_TITLE}}}{{{PROJECT_1_DATE}}}
+
+\begin{itemize}
+    \item {{PROJECT_1_BULLET_1}}
+    \item {{PROJECT_1_BULLET_2}}
+    \item {{PROJECT_1_BULLET_3}}
+\end{itemize}
+
+\vspace{6pt}
+
+\projectentry{{{PROJECT_2_TITLE}}}{{{PROJECT_2_DATE}}}
+
+\begin{itemize}
+    \item {{PROJECT_2_BULLET_1}}
+    \item {{PROJECT_2_BULLET_2}}
+\end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% EDUCATION
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\resumesection{EDUCATION}
+
+\textbf{Dr. MGR Educational and Research Institute} | Chennai, Tamil Nadu
+
+Bachelor of Technology - Computer Science \& Engineering | CGPA: 8.2/10 \hfill Sep 2021 - Aug 2025
+
+\textit{Relevant Coursework:} {{RELEVANT_COURSES}}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% CERTIFICATIONS
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\resumesection{CERTIFICATIONS \& PUBLICATIONS}
+
+\begin{itemize}
+    \item Research Paper: "Developing an LLM for Law Utilities" (IEEE Conference, March 2025)
+    \item {{CERT_1}}
+    \item {{CERT_2}}
+    \item {{CERT_3}}
+\end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% LANGUAGES (if relevant to job)
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+{{LANGUAGES_SECTION}}
+
+\end{document}
