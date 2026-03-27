@@ -1,7 +1,10 @@
 # Secrets — NEVER commit these
 .env
 *.env
-*.env.*
+.env.local
+.env.production
+# Allow example template
+!.env.example
 
 # CV and personal documents
 *.pdf

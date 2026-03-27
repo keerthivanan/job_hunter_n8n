@@ -92,29 +92,21 @@
     {
       "id": "lin-05",
       "name": "Load Seen Job IDs",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
       "position": [
         960,
         300
       ],
       "parameters": {
-        "method": "GET",
-        "url": "https://sheets.googleapis.com/v4/spreadsheets/1M6UF8XbiyA83JN_Poej3ec3YOwETpDPBqnbIrLgDYIQ/values/Applications!A:A",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "googleSheetsOAuth2Api",
-        "options": {
-          "response": {
-            "response": {
-              "neverError": true
-            }
-          }
-        }
+        "operation": "executeQuery",
+        "query": "SELECT job_id FROM applied_jobs;",
+        "options": {}
       },
       "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "uzUh6HqKP03Ck9VO",
-          "name": "Google Sheets account"
+        "postgres": {
+          "id": "POSTGRES_CREDENTIAL_ID",
+          "name": "PostgreSQL"
         }
       }
     },
@@ -129,7 +121,7 @@
       ],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "let normalizedItems;\ntry { normalizedItems = $('Normalize All Jobs').all(); } catch(e) { normalizedItems = []; }\nconst seenIds = new Set();\ntry {\n  for (const r of $input.all()) {\n    const j = r.json || {};\n    if (j.values && Array.isArray(j.values)) { for (const row of j.values) { if (row && row[0]) seenIds.add(String(row[0])); } }\n    if (j.jobId) seenIds.add(String(j.jobId));\n  }\n} catch(e) {}\nconst allValid = normalizedItems.filter(i => { const j = i.json; return j && j.jobId && j.url && j.title && !j.message; });\nconst newJobs = allValid.filter(i => !seenIds.has(String(i.json.jobId)));\nnewJobs.sort((a, b) => new Date(b.json.postedAt||0) - new Date(a.json.postedAt||0));\nconsole.log('Normalized:', normalizedItems.length, '| Seen:', seenIds.size, '| New:', newJobs.length);\nif (newJobs.length === 0) return [{ json: { message: 'No new jobs \u2014 all already applied' } }];\nreturn newJobs.slice(0, 3);"
+        "jsCode": "let normalizedItems;\ntry { normalizedItems = .all(); } catch(e) { normalizedItems = []; }\n\n// Build seenIds from Postgres rows: [{job_id: '...'}, ...]\nconst seenIds = new Set();\ntry {\n  for (const r of .all()) {\n    const j = r.json || {};\n    if (j.job_id) seenIds.add(String(j.job_id));\n    // fallback: old Google Sheets format\n    if (j.values && Array.isArray(j.values)) {\n      for (const row of j.values) { if (row && row[0]) seenIds.add(String(row[0])); }\n    }\n  }\n} catch(e) {}\n\nconst allValid = normalizedItems.filter(i => {\n  const j = i.json;\n  return j && j.jobId && j.url && j.title && !j.message;\n});\nconst newJobs = allValid.filter(i => !seenIds.has(String(i.json.jobId)));\nnewJobs.sort((a, b) => new Date(b.json.postedAt||0) - new Date(a.json.postedAt||0));\nconsole.log('Normalized:', normalizedItems.length, '| Seen:', seenIds.size, '| New:', newJobs.length);\nif (newJobs.length === 0) return [{ json: { message: 'No new jobs — all already applied' } }];\nreturn newJobs.slice(0, 3);"
       }
     },
     {
@@ -157,7 +149,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const j = $input.item.json;\n// CV is embedded at deploy time by deploy.js\nconst CV_BASE64 = ''; // placeholder \u2014 deploy.js patches this\nreturn { json: { ...j, resumeBase64: CV_BASE64, resumeFileName: 'Keerthivanan_S_Resume.pdf' } };"
+        "jsCode": "const j = $input.item.json;\n// CV is embedded at deploy time by deploy.js\nconst CV_BASE64 = ''; // placeholder — deploy.js patches this\nreturn { json: { ...j, resumeBase64: CV_BASE64, resumeFileName: 'Keerthivanan_S_Resume.pdf' } };"
       }
     },
     {
@@ -185,7 +177,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const j = $input.item.json;\nconst creds = await this.getCredentials('openAiApi');\nconst OPENAI_KEY = creds.apiKey;\nconst targetEmail = j.hrEmail || 'keerthivanan7@gmail.com';\n\nconst SYSTEM = `Write a 120-word job application email from Keerthivanan S.\nRULES:\n- First line: \"Dear Hiring Team at [company],\"\n- Paragraph 1 (2 sentences): Hook with CargoLink.sa + one key metric matching the job.\n- Paragraph 2 (3 bullets): 3 achievements directly relevant to this specific job.\n- Paragraph 3 (1 sentence): Mention LinkedIn, GitHub, live portfolio.\n- Close: \"My resume is attached. Happy to connect.\"\n- Signature: Sincerely,\\nKeerthivanan S\\nkeerthivanan.ds.ai@gmail.com | +91-709-276-1445\n- Include in body: \"LinkedIn: https://linkedin.com/in/keerthi-vanan-s | GitHub: https://github.com/keerthivanan-s | Portfolio: https://cargolink.sa\"\n- STRICT 120 words MAX. No headers. No bold. Plain text only.\n- Return JSON: {\"subject\": \"Application: [role] | Keerthivanan S \u2014 AI Engineer\", \"body\": \"...\"}`;\n\ntry {\n  const res = await this.helpers.httpRequest({\n    method: 'POST',\n    url: 'https://api.openai.com/v1/chat/completions',\n    headers: { 'Authorization': 'Bearer ' + OPENAI_KEY, 'Content-Type': 'application/json' },\n    body: JSON.stringify({\n      model: 'gpt-4o-mini',\n      messages: [\n        { role: 'system', content: SYSTEM },\n        { role: 'user', content: 'Job: ' + j.title + ' at ' + j.company + ' (' + (j.location||'Remote') + ')\\nDescription: ' + (j.description||'').slice(0,600) + '\\n\\nCandidate facts: Gen AI Architect at CargoLink.sa. Built GPT-4+Qdrant RAG \u2192 65% faster processing, 95% accuracy, 1000+ users. Stack: Python, LangChain, FastAPI, Next.js 15, Docker, Redis, n8n. IEEE paper March 2025.' }\n      ],\n      temperature: 0.6,\n      response_format: { type: 'json_object' }\n    })\n  });\n  const raw = typeof res === 'string' ? JSON.parse(res) : res;\n  const parsed = JSON.parse(raw.choices[0].message.content);\n  return { json: { ...j, hrEmail: targetEmail, emailSubject: parsed.subject, emailBody: parsed.body, emailSkipped: false } };\n} catch(e) {\n  return { json: { ...j, hrEmail: targetEmail,\n    emailSubject: 'Application: ' + j.title + ' | Keerthivanan S \u2014 AI Engineer',\n    emailBody: 'Dear Hiring Team at ' + j.company + ',\\n\\nI built CargoLink.sa \u2014 a production logistics SaaS with 1000+ users, 99.5% uptime, and 65% faster AI-powered processing.\\n\\n\u2022 RAG system: GPT-4 + Qdrant, 95% quote accuracy, 500+ daily transactions\\n\u2022 Stack: Python, LangChain, FastAPI, Next.js 15, Docker, Redis, n8n\\n\u2022 Reduced costs 40%+ and deployment time from 2hrs to 15min\\n\\nLinkedIn: https://linkedin.com/in/keerthi-vanan-s | GitHub: https://github.com/keerthivanan-s | Portfolio: https://cargolink.sa\\n\\nMy resume is attached. Happy to connect.\\n\\nSincerely,\\nKeerthivanan S\\nkeerthivanan.ds.ai@gmail.com | +91-709-276-1445',\n    emailSkipped: false } };\n}"
+        "jsCode": "const j = $input.item.json;\nconst creds = await this.getCredentials('openAiApi');\nconst OPENAI_KEY = creds.apiKey;\nconst targetEmail = j.hrEmail || 'keerthivanan7@gmail.com';\n\nconst SYSTEM = `Write a 120-word job application email from Keerthivanan S.\nRULES:\n- First line: \"Dear Hiring Team at [company],\"\n- Paragraph 1 (2 sentences): Hook with CargoLink.sa + one key metric matching the job.\n- Paragraph 2 (3 bullets): 3 achievements directly relevant to this specific job.\n- Paragraph 3 (1 sentence): Mention LinkedIn, GitHub, live portfolio.\n- Close: \"My resume is attached. Happy to connect.\"\n- Signature: Sincerely,\\nKeerthivanan S\\nkeerthivanan.ds.ai@gmail.com | +91-709-276-1445\n- Include in body: \"LinkedIn: https://linkedin.com/in/keerthi-vanan-s | GitHub: https://github.com/keerthivanan-s | Portfolio: https://cargolink.sa\"\n- STRICT 120 words MAX. No headers. No bold. Plain text only.\n- Return JSON: {\"subject\": \"Application: [role] | Keerthivanan S — AI Engineer\", \"body\": \"...\"}`;\n\ntry {\n  const res = await this.helpers.httpRequest({\n    method: 'POST',\n    url: 'https://api.openai.com/v1/chat/completions',\n    headers: { 'Authorization': 'Bearer ' + OPENAI_KEY, 'Content-Type': 'application/json' },\n    body: JSON.stringify({\n      model: 'gpt-4o-mini',\n      messages: [\n        { role: 'system', content: SYSTEM },\n        { role: 'user', content: 'Job: ' + j.title + ' at ' + j.company + ' (' + (j.location||'Remote') + ')\\nDescription: ' + (j.description||'').slice(0,600) + '\\n\\nCandidate facts: Gen AI Architect at CargoLink.sa. Built GPT-4+Qdrant RAG → 65% faster processing, 95% accuracy, 1000+ users. Stack: Python, LangChain, FastAPI, Next.js 15, Docker, Redis, n8n. IEEE paper March 2025.' }\n      ],\n      temperature: 0.6,\n      response_format: { type: 'json_object' }\n    })\n  });\n  const raw = typeof res === 'string' ? JSON.parse(res) : res;\n  const parsed = JSON.parse(raw.choices[0].message.content);\n  return { json: { ...j, hrEmail: targetEmail, emailSubject: parsed.subject, emailBody: parsed.body, emailSkipped: false } };\n} catch(e) {\n  return { json: { ...j, hrEmail: targetEmail,\n    emailSubject: 'Application: ' + j.title + ' | Keerthivanan S — AI Engineer',\n    emailBody: 'Dear Hiring Team at ' + j.company + ',\\n\\nI built CargoLink.sa — a production logistics SaaS with 1000+ users, 99.5% uptime, and 65% faster AI-powered processing.\\n\\n• RAG system: GPT-4 + Qdrant, 95% quote accuracy, 500+ daily transactions\\n• Stack: Python, LangChain, FastAPI, Next.js 15, Docker, Redis, n8n\\n• Reduced costs 40%+ and deployment time from 2hrs to 15min\\n\\nLinkedIn: https://linkedin.com/in/keerthi-vanan-s | GitHub: https://github.com/keerthivanan-s | Portfolio: https://cargolink.sa\\n\\nMy resume is attached. Happy to connect.\\n\\nSincerely,\\nKeerthivanan S\\nkeerthivanan.ds.ai@gmail.com | +91-709-276-1445',\n    emailSkipped: false } };\n}"
       }
     },
     {
@@ -269,33 +261,47 @@
     {
       "id": "lin-14",
       "name": "Log Applied Job",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
       "position": [
         3160,
         160
       ],
       "parameters": {
-        "method": "POST",
-        "url": "https://sheets.googleapis.com/v4/spreadsheets/1M6UF8XbiyA83JN_Poej3ec3YOwETpDPBqnbIrLgDYIQ/values/Applications!A1:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "googleSheetsOAuth2Api",
-        "sendBody": true,
-        "contentType": "raw",
-        "rawContentType": "application/json",
-        "body": "={{ JSON.stringify({ values: [[ String($json.jobId||''), new Date().toISOString(), new Date().toISOString(), $json.emailSkipped ? 'Applied - No Email' : 'Applied', String($json.title||''), String($json.company||''), String($json.location||''), String($json.url||''), String($json.source||''), Number($json.score||0), String($json.matchedSkills||''), String($json.hrEmail||''), 'latexonline.cc', String($json.emailSubject||''), 'Auto-applied via Apify' ]] }) }}",
+        "operation": "insert",
+        "schema": {
+          "__rl": true,
+          "value": "public",
+          "mode": "list"
+        },
+        "table": {
+          "__rl": true,
+          "value": "applied_jobs",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "job_id": "={{ $json.jobId }}",
+            "title": "={{ $json.title }}",
+            "company": "={{ $json.company }}",
+            "hr_email": "={{ $json.hrEmail }}",
+            "email_subject": "={{ $json.emailSubject }}",
+            "status": "Applied"
+          },
+          "matchingColumns": [
+            "job_id"
+          ],
+          "schema": []
+        },
         "options": {
-          "response": {
-            "response": {
-              "neverError": true
-            }
-          }
+          "onConflict": "ignore"
         }
       },
       "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "uzUh6HqKP03Ck9VO",
-          "name": "Google Sheets account"
+        "postgres": {
+          "id": "POSTGRES_CREDENTIAL_ID",
+          "name": "PostgreSQL"
         }
       }
     }
