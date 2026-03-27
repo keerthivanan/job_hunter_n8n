@@ -92,22 +92,15 @@
     {
       "id": "lin-05",
       "name": "Load Seen Job IDs",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.5,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         960,
         300
       ],
       "parameters": {
-        "operation": "executeQuery",
-        "query": "SELECT job_id FROM applied_jobs;",
-        "options": {}
-      },
-      "credentials": {
-        "postgres": {
-          "id": "POSTGRES_CREDENTIAL_ID",
-          "name": "PostgreSQL"
-        }
+        "jsCode": "try {\n  const res = await this.helpers.httpRequest({\n    method: \"GET\",\n    url: \"https://rrlwxizsvrlznppatkgd.supabase.co/rest/v1/applied_jobs?select=job_id\",\n    headers: {\n      \"apikey\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJybHd4aXpzdnJsem5wcGF0a2dkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ1NzE5MTEsImV4cCI6MjA5MDE0NzkxMX0.01TDFCjgCAFNc9ZRRPoRWqKi4y4HRJTUdT5BGtK5_8c\",\n      \"Authorization\": \"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJybHd4aXpzdnJsem5wcGF0a2dkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ1NzE5MTEsImV4cCI6MjA5MDE0NzkxMX0.01TDFCjgCAFNc9ZRRPoRWqKi4y4HRJTUdT5BGtK5_8c\",\n      \"Content-Type\": \"application/json\"\n    }\n  });\n  const rows = Array.isArray(res) ? res : (typeof res === \"string\" ? JSON.parse(res) : []);\n  const seenIds = rows.map(r => String(r.job_id)).filter(Boolean);\n  console.log(\"Supabase seen IDs:\", seenIds.length);\n  return [{ json: { seenIds } }];\n} catch(e) {\n  console.log(\"Load seen IDs error:\", e.message);\n  return [{ json: { seenIds: [] } }];\n}",
+        "mode": "runOnceForAllItems"
       }
     },
     {
@@ -121,7 +114,7 @@
       ],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "let normalizedItems;\ntry { normalizedItems = .all(); } catch(e) { normalizedItems = []; }\n\n// Build seenIds from Postgres rows: [{job_id: '...'}, ...]\nconst seenIds = new Set();\ntry {\n  for (const r of .all()) {\n    const j = r.json || {};\n    if (j.job_id) seenIds.add(String(j.job_id));\n    // fallback: old Google Sheets format\n    if (j.values && Array.isArray(j.values)) {\n      for (const row of j.values) { if (row && row[0]) seenIds.add(String(row[0])); }\n    }\n  }\n} catch(e) {}\n\nconst allValid = normalizedItems.filter(i => {\n  const j = i.json;\n  return j && j.jobId && j.url && j.title && !j.message;\n});\nconst newJobs = allValid.filter(i => !seenIds.has(String(i.json.jobId)));\nnewJobs.sort((a, b) => new Date(b.json.postedAt||0) - new Date(a.json.postedAt||0));\nconsole.log('Normalized:', normalizedItems.length, '| Seen:', seenIds.size, '| New:', newJobs.length);\nif (newJobs.length === 0) return [{ json: { message: 'No new jobs — all already applied' } }];\nreturn newJobs.slice(0, 3);"
+        "jsCode": "let normalizedItems;\ntry { normalizedItems = $(\"Normalize All Jobs\").all(); } catch(e) { normalizedItems = []; }\n\n// Get seen IDs from previous node\nconst seenIds = new Set();\ntry {\n  for (const r of $input.all()) {\n    const ids = r.json.seenIds;\n    if (Array.isArray(ids)) ids.forEach(id => seenIds.add(String(id)));\n  }\n} catch(e) {}\n\nconst allValid = normalizedItems.filter(i => {\n  const j = i.json;\n  return j && j.jobId && j.url && j.title && !j.message;\n});\nconst newJobs = allValid.filter(i => !seenIds.has(String(i.json.jobId)));\nnewJobs.sort((a,b) => new Date(b.json.postedAt||0) - new Date(a.json.postedAt||0));\nconsole.log(\"Valid:\", allValid.length, \"| Seen:\", seenIds.size, \"| New:\", newJobs.length);\nif (newJobs.length === 0) return [{ json: { message: \"No new jobs — all already applied\" } }];\nreturn newJobs.slice(0, 3);"
       }
     },
     {
@@ -208,17 +201,17 @@
           "options": {
             "caseSensitive": true,
             "leftValue": "",
-            "typeValidation": "strict"
+            "typeValidation": "strict",
+            "version": 2
           },
           "conditions": [
             {
-              "id": "cond-has-email",
-              "leftValue": "={{ $json.hrEmail }}",
-              "rightValue": "",
+              "id": "shouldSend",
+              "leftValue": "={{ $json.shouldSend }}",
+              "rightValue": true,
               "operator": {
-                "type": "string",
-                "operation": "notEmpty",
-                "singleValue": true
+                "type": "boolean",
+                "operation": "equals"
               }
             }
           ],
@@ -260,49 +253,16 @@
     },
     {
       "id": "lin-14",
-      "name": "Log Applied Job",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.5,
+      "name": "Lock & Log",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         3160,
         160
       ],
       "parameters": {
-        "operation": "insert",
-        "schema": {
-          "__rl": true,
-          "value": "public",
-          "mode": "list"
-        },
-        "table": {
-          "__rl": true,
-          "value": "applied_jobs",
-          "mode": "list"
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "job_id": "={{ $json.jobId }}",
-            "title": "={{ $json.title }}",
-            "company": "={{ $json.company }}",
-            "hr_email": "={{ $json.hrEmail }}",
-            "email_subject": "={{ $json.emailSubject }}",
-            "status": "Applied"
-          },
-          "matchingColumns": [
-            "job_id"
-          ],
-          "schema": []
-        },
-        "options": {
-          "onConflict": "ignore"
-        }
-      },
-      "credentials": {
-        "postgres": {
-          "id": "POSTGRES_CREDENTIAL_ID",
-          "name": "PostgreSQL"
-        }
+        "jsCode": "// WRITE-AHEAD LOG: log first, send email only if new\nconst j = $input.item.json;\nconst bin = $input.item.binary || {};\nconst jobId = String(j.jobId || \"\");\nif (!jobId || j.message) return { json: { ...j, shouldSend: false }, binary: bin };\n\ntry {\n  await this.helpers.httpRequest({\n    method: \"POST\",\n    url: \"https://rrlwxizsvrlznppatkgd.supabase.co/rest/v1/applied_jobs\",\n    headers: {\n      \"apikey\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJybHd4aXpzdnJsem5wcGF0a2dkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ1NzE5MTEsImV4cCI6MjA5MDE0NzkxMX0.01TDFCjgCAFNc9ZRRPoRWqKi4y4HRJTUdT5BGtK5_8c\",\n      \"Authorization\": \"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJybHd4aXpzdnJsem5wcGF0a2dkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ1NzE5MTEsImV4cCI6MjA5MDE0NzkxMX0.01TDFCjgCAFNc9ZRRPoRWqKi4y4HRJTUdT5BGtK5_8c\",\n      \"Content-Type\": \"application/json\",\n      \"Prefer\": \"resolution=abort-duplicates,return=minimal\"\n    },\n    body: JSON.stringify({\n      job_id: jobId,\n      title: j.title || \"\",\n      company: j.company || \"\",\n      hr_email: j.hrEmail || \"\",\n      email_subject: j.emailSubject || \"\"\n    })\n  });\n  console.log(\"NEW:\", j.company, jobId);\n  return { json: { ...j, shouldSend: true }, binary: bin };\n} catch(e) {\n  console.log(\"BLOCKED:\", j.company, jobId);\n  return { json: { ...j, shouldSend: false }, binary: bin };\n}",
+        "mode": "runOnceForEachItem"
       }
     }
   ],
@@ -422,7 +382,7 @@
       "main": [
         [
           {
-            "node": "Has Email?",
+            "node": "Lock & Log",
             "type": "main",
             "index": 0
           }
@@ -438,20 +398,19 @@
             "index": 0
           }
         ],
-        [
-          {
-            "node": "Log Applied Job",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        []
       ]
     },
     "Send Email via Gmail": {
       "main": [
+        []
+      ]
+    },
+    "Lock & Log": {
+      "main": [
         [
           {
-            "node": "Log Applied Job",
+            "node": "Has Email?",
             "type": "main",
             "index": 0
           }

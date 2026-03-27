@@ -105,11 +105,14 @@ const SYSTEM_PROMPT = [
   '- Return JSON: {"subject": "Application: [role] | Keerthivanan S — AI Engineer", "body": "..."}'
 ].join('\\n');
 
+const OPENAI_KEY = process.env.OPENAI_API_KEY;
+if (!OPENAI_KEY) { console.error('ERROR: OPENAI_API_KEY missing from .env'); process.exit(1); }
+
 const COMPOSE_EMAIL_CODE = [
   'const j = $input.item.json;',
-  'const creds = await this.getCredentials("openAiApi");',
-  'const OPENAI_KEY = creds.apiKey;',
-  'const targetEmail = j.hrEmail || "keerthivanan7@gmail.com";',
+  'const OPENAI_KEY = ' + JSON.stringify(OPENAI_KEY) + ';',
+  '// TEST MODE: ALL emails go to keerthivanan7@gmail.com so you can verify before going live',
+  'const targetEmail = "keerthivanan7@gmail.com";',
   'const SYSTEM = ' + JSON.stringify(SYSTEM_PROMPT) + ';',
   'try {',
   '  const res = await this.helpers.httpRequest({',
@@ -162,28 +165,7 @@ async function main() {
   wf.nodes.find(n => n.name === 'Find HR Email').parameters.jsCode = FIND_HR_EMAIL_CODE;
   console.log('All 5 nodes patched.');
 
-  // Auto-discover PostgreSQL credential ID by name
-  const creds = await api('GET', '/api/v1/credentials');
-  const pgCred = (creds.d.data || []).find(c => c.name === 'PostgreSQL' && c.type === 'postgres');
-  if (!pgCred) {
-    console.log('\n⚠️  POSTGRES CREDENTIAL NOT FOUND IN N8N');
-    console.log('Go to: https://' + HOST);
-    console.log('Settings → Credentials → New → PostgreSQL');
-    console.log('  Host:     db.rrlwxizsvrlznppatkgd.supabase.co');
-    console.log('  Port:     5432');
-    console.log('  Database: postgres');
-    console.log('  User:     postgres');
-    console.log('  Password: Keerthimaster1');
-    console.log('  SSL:      Require');
-    console.log('  Name it:  PostgreSQL');
-    console.log('\nThen run: node deploy_final.js\n');
-    process.exit(1);
-  }
-  console.log('PostgreSQL credential found: ID =', pgCred.id);
-  // Inject real credential ID into Postgres nodes
-  wf.nodes.filter(n => n.type === 'n8n-nodes-base.postgres').forEach(n => {
-    n.credentials = { postgres: { id: pgCred.id, name: 'PostgreSQL' } };
-  });
+  // Supabase dedup uses REST API via httpHeaderAuth — no Postgres credential needed
 
   console.log('Deactivating...');
   await api('POST', '/api/v1/workflows/' + WORKFLOW_ID + '/deactivate', null);
